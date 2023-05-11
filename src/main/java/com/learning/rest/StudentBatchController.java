@@ -17,52 +17,53 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class StudentBatchController {
 
-	private final StudentBatchService studentBatchService;
-     @GetMapping
-	public List<StudentBatchModel> getAllStudent() {
-		 return studentBatchService.getAllRecords();	
-	}
+    private final StudentBatchService studentBatchService;
 
-	@GetMapping("get-records")
-	public List<StudentBatchModel> getAllRecords(@RequestParam(value = "count" ,required = false , defaultValue = "0")
-										  int count, @RequestParam(value = "sortBy", required = false, defaultValue = "") String sortBy) {
-		if (count == 0 && (Objects.isNull(sortBy) || sortBy.isBlank())) {
-			return studentBatchService.getAllRecords();
-		} else if (count > 0) {
-			return studentBatchService.getLimitedRecords(count);
-		} else {
-			return studentBatchService.getSortedRecords(sortBy);
-		}
-	}
+    @GetMapping
+    public List<StudentBatchModel> getAllStudent() {
+        return studentBatchService.getAllRecords();
+    }
 
-	@PostMapping
-	public StudentBatchModel save(@RequestBody StudentBatchModel studentBatchModel) {
-		return studentBatchService.saveRecord(studentBatchModel);
-	}
+    @GetMapping("get-records")
+    public List<StudentBatchModel> getAllRecords(@RequestParam(value = "count", required = false, defaultValue = "0")
+                                                 int count, @RequestParam(value = "sortBy", required = false, defaultValue = "") String sortBy) {
+        if (count == 0 && (Objects.isNull(sortBy) || sortBy.isBlank())) {
+            return studentBatchService.getAllRecords();
+        } else if (count > 0) {
+            return studentBatchService.getLimitedRecords(count);
+        } else {
+            return studentBatchService.getSortedRecords(sortBy);
+        }
+    }
 
-	@PostMapping("/all")
-	public List<StudentBatchModel> saveAll(@RequestBody List<StudentBatchModel> studentBatchModelList){
-		return  studentBatchService.saveAll(studentBatchModelList);
-	}
-	@PutMapping("/{id}")
-	public StudentBatchModel updateById(@PathVariable Long id, @RequestBody StudentBatchModel studentBatchModel) {
-		return studentBatchService.updateRecordById(id, studentBatchModel);
-	}
+    @PostMapping
+    public StudentBatchModel save(@RequestBody StudentBatchModel studentBatchModel) {
+        return studentBatchService.saveRecord(studentBatchModel);
+    }
 
-	//  TODO : REFACTOR LATER
-	@GetMapping("/{id}")
-	public StudentBatchModel getRecordById(@PathVariable Long id){
-		return studentBatchService.getRecordById(id);
-	}
+    @PostMapping("/all")
+    public List<StudentBatchModel> saveAll(@RequestBody List<StudentBatchModel> studentBatchModelList) {
+        return studentBatchService.saveAll(studentBatchModelList);
+    }
 
-	@DeleteMapping("/{id}")
-	public void deleteRecordById(@PathVariable Long id) {
-		studentBatchService.deleteRecordById(id);
-	}
+    @PutMapping("/{id}")
+    public StudentBatchModel updateById(@PathVariable Long id, @RequestBody StudentBatchModel studentBatchModel) {
+        return studentBatchService.updateRecordById(id, studentBatchModel);
+    }
 
-	@PostMapping("/upload")
-	public String uploadExcelFile(@RequestParam ("file") MultipartFile file){
-		studentBatchService.saveExcelFile(file);
-		return "file uploaded successfully";
-	}
+    @GetMapping("/{id}")
+    public StudentBatchModel getRecordById(@PathVariable Long id) {
+        return studentBatchService.getRecordById(id);
+    }
+
+    @DeleteMapping("/{id}")
+    public void deleteRecordById(@PathVariable Long id) {
+        studentBatchService.deleteRecordById(id);
+    }
+
+    @PostMapping("/upload")
+    public String uploadExcelFile(@RequestParam("file") MultipartFile file) {
+        studentBatchService.saveExcelFile(file);
+        return "file uploaded successfully";
+    }
 }

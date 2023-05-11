@@ -1,45 +1,49 @@
 package com.learning.service.impl;
 
-import java.io.IOException;
-import java.util.*;
-import java.util.stream.Collectors;
-
-import com.learning.constant.NumberConstant;
-import com.learning.entity.StudentEntity;
-import com.learning.entity.TimeSlotEntity;
-import com.learning.model.StudentModel;
+import com.learning.collection.StudentBatchCollection;
+import com.learning.entity.StudentBatchEntity;
+import com.learning.exception.DataNotFoundException;
+import com.learning.model.StudentBatchModel;
+import com.learning.mongoRepository.StudentBatchMongoRepo;
+import com.learning.repository.StudentBatchRepository;
+import com.learning.service.CommonService;
 import com.learning.utility.excel.StudentBatchReader;
-import com.learning.utility.excel.TimeSlotReader;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
-
-import com.learning.entity.StudentBatchEntity;
-import com.learning.model.StudentBatchModel;
-import com.learning.repository.StudentBatchRepository;
-import com.learning.service.CommonService;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class StudentBatchService implements CommonService<StudentBatchModel, Long> {
-	private final StudentBatchRepository studentBatchRepository;
+	private final StudentBatchRepository jpaRepository;
 	private final ModelMapper modelMapper;
-
 	private final StudentBatchReader studentBatchReader;
+	private final StudentBatchMongoRepo mongoRepository;
 
 	@Override
 	public List<StudentBatchModel> getAllRecords() {
-		List<StudentBatchEntity> studentBatchEntityList = studentBatchRepository.findAll();
-		if (!CollectionUtils.isEmpty(studentBatchEntityList)) {
+		List<StudentBatchCollection> studentBatchCollectionList = mongoRepository.findAll();
+		List<StudentBatchEntity> studentBatchEntityList = jpaRepository.findAll();
+		if (!CollectionUtils.isEmpty(studentBatchCollectionList)) {
+			List<StudentBatchModel> studentBatchModelList = studentBatchCollectionList.stream()
+					.map(studentBatchCollection -> modelMapper.map(studentBatchCollection, StudentBatchModel.class))
+					.collect(Collectors.toList());
+			return studentBatchModelList;
+		} else if (!CollectionUtils.isEmpty(studentBatchEntityList)) {
 			List<StudentBatchModel> studentBatchModelList = studentBatchEntityList.stream()
-					.map(studentBatchEntity -> {
-						StudentBatchModel studentBatchModel = new StudentBatchModel();
-						//		BeanUtils.copyProperties(studentBatchEntity, studentBatchModel);
-						modelMapper.map(studentBatchEntity, studentBatchModel);
-						return studentBatchModel;
-					}).collect(Collectors.toList());
+					.map(studentBatchEntity ->
+							//	BeanUtils.copyProperties(studentEntity, studentModel);
+							modelMapper.map(studentBatchEntity, StudentBatchModel.class))
+					.collect(Collectors.toList());
 			return studentBatchModelList;
 		} else {
 			return Collections.emptyList();
@@ -48,16 +52,21 @@ public class StudentBatchService implements CommonService<StudentBatchModel, Lon
 
 	@Override
 	public List<StudentBatchModel> getLimitedRecords(int count) {
-		List<StudentBatchEntity> studentBatchEntityList = studentBatchRepository.findAll();
-		if (!CollectionUtils.isEmpty(studentBatchEntityList)) {
+		List<StudentBatchCollection> studentBatchCollectionList = mongoRepository.findAll();
+		List<StudentBatchEntity> studentBatchEntityList = jpaRepository.findAll();
+		if (!CollectionUtils.isEmpty(studentBatchCollectionList)) {
+			List<StudentBatchModel> studentBatchModelList = studentBatchCollectionList.stream()
+					.limit(count)
+					.map(studentBatchCollection -> modelMapper.map(studentBatchCollection, StudentBatchModel.class))
+					.collect(Collectors.toList());
+			return studentBatchModelList;
+		} else if (!CollectionUtils.isEmpty(studentBatchEntityList)) {
 			List<StudentBatchModel> studentBatchModelList = studentBatchEntityList.stream()
 					.limit(count)
-					.map(studentBatchEntity -> {
-						StudentBatchModel studentBatchModel = new StudentBatchModel();
-						//		BeanUtils.copyProperties(studentBatchEntity, studentBatchModel);
-						modelMapper.map(studentBatchEntity, studentBatchModel);
-						return studentBatchModel;
-					}).collect(Collectors.toList());
+					.map(studentBatchEntity ->
+							//	BeanUtils.copyProperties(studentBatchEntity, studentBatchModel);
+							modelMapper.map(studentBatchEntity, StudentBatchModel.class))
+					.collect(Collectors.toList());
 			return studentBatchModelList;
 		} else {
 			return Collections.emptyList();
@@ -66,15 +75,20 @@ public class StudentBatchService implements CommonService<StudentBatchModel, Lon
 
 	@Override
 	public List<StudentBatchModel> getSortedRecords(String sortBy) {
-		List<StudentBatchEntity> studentBatchEntityList = studentBatchRepository.findAll();
-		if (Objects.nonNull(studentBatchEntityList) && studentBatchEntityList.size() > NumberConstant.ZERO) {
+		List<StudentBatchCollection> studentBatchCollectionList = mongoRepository.findAll();
+		List<StudentBatchEntity> studentBatchEntityList = jpaRepository.findAll();
+		if (!CollectionUtils.isEmpty(studentBatchCollectionList)) {
+			Comparator<StudentBatchCollection> comparator = findSuitableComparatorTwo(sortBy);
+			List<StudentBatchModel> studentBatchModelList = studentBatchCollectionList.stream()
+					.sorted(comparator)
+					.map(studentBatchCollection -> modelMapper.map(studentBatchCollection, StudentBatchModel.class))
+					.collect(Collectors.toList());
+			return studentBatchModelList;
+		} else if (!CollectionUtils.isEmpty(studentBatchEntityList)) {
 			Comparator<StudentBatchEntity> comparator = findSuitableComparator(sortBy);
 			List<StudentBatchModel> studentBatchModelList = studentBatchEntityList.stream()
 					.sorted(comparator)
-					.map(studentBatchEntity -> {
-						StudentBatchModel studentBatchModel = modelMapper.map(studentBatchEntity, StudentBatchModel.class);
-						return studentBatchModel;
-					})
+					.map(studentBatchEntity -> modelMapper.map(studentBatchEntity, StudentBatchModel.class))
 					.collect(Collectors.toList());
 			return studentBatchModelList;
 		} else {
@@ -88,49 +102,79 @@ public class StudentBatchService implements CommonService<StudentBatchModel, Lon
 			StudentBatchEntity studentBatchEntity = new StudentBatchEntity();
 			//	BeanUtils.copyProperties(studentBatchModel, studentBatchEntity);
 			modelMapper.map(studentBatchModel, studentBatchEntity);
-			studentBatchRepository.save(studentBatchEntity);
+			jpaRepository.save(studentBatchEntity);
+
+			Runnable runnable = () -> {
+				StudentBatchCollection studentBatchCollection = new StudentBatchCollection();
+				modelMapper.map(studentBatchEntity, studentBatchCollection);
+				mongoRepository.save(studentBatchCollection);
+			};
+			CompletableFuture.runAsync(runnable);
 		}
 		return studentBatchModel;
 	}
 	@Override
 	public List<StudentBatchModel> saveAll(List<StudentBatchModel> studentBatchModelList) {
-		if (Objects.nonNull(studentBatchModelList) && studentBatchModelList.size() > NumberConstant.ZERO) {
+		if (!CollectionUtils.isEmpty(studentBatchModelList)) {
 			List<StudentBatchEntity> studentBatchEntityList = studentBatchModelList.stream()
-					.map(studentBatchModel -> {
-						StudentBatchEntity entity = modelMapper.map(studentBatchModel, StudentBatchEntity.class);
-						return entity;
-					})
+					.map(studentBatchModel -> modelMapper.map(studentBatchModel, StudentBatchEntity.class))
 					.collect(Collectors.toList());
-			studentBatchRepository.saveAll(studentBatchEntityList);
+			jpaRepository.saveAll(studentBatchEntityList);
+			Runnable runnable = () -> {
+				List<StudentBatchCollection> studentBatchCollectionList = studentBatchEntityList.stream()
+						.map(studentBatchEntity -> modelMapper.map(studentBatchEntity, StudentBatchCollection.class))
+						.collect(Collectors.toList());
+				mongoRepository.saveAll(studentBatchCollectionList);
+			};
+			CompletableFuture.runAsync(runnable);
 		}
 		return studentBatchModelList;
-
 	}
 	@Override
 	public StudentBatchModel getRecordById(Long id) {
-		Optional<StudentBatchEntity> optionalEntity = studentBatchRepository.findById(id);
-		if (optionalEntity.isPresent()) {
-			StudentBatchEntity studentBatchEntity = optionalEntity.get();
-			StudentBatchModel studentBatchModel = modelMapper.map(studentBatchEntity, StudentBatchModel.class);
+		if (mongoRepository.existsById(id)) {
+			StudentBatchCollection studentBatchCollection = mongoRepository.findById(id)
+					.orElseThrow(() ->
+							new DataNotFoundException("Record Not Found" + id));
+			StudentBatchModel studentBatchModel = modelMapper.map(studentBatchCollection, StudentBatchModel.class);
 			return studentBatchModel;
 		}
-		throw new IllegalArgumentException("Student Batch Entity Not Found for id:"+id);
+		StudentBatchEntity studentBatchEntity = jpaRepository.findById(id)
+				.orElseThrow(() -> new DataNotFoundException("Record Not found" + id));
+		StudentBatchModel studentBatchModel = modelMapper.map(studentBatchEntity, StudentBatchModel.class);
+		return studentBatchModel;
 	}
+
 
 	@Override
 	public void deleteRecordById(Long id) {
-		studentBatchRepository.deleteById(id);
+		if (mongoRepository.existsById(id)) {
+			log.info("[deleteRecordById] from Mongo: {}", id);
+			mongoRepository.deleteById(id);
+		}
+		if (jpaRepository.existsById(id)) {
+			CompletableFuture.runAsync(()-> {
+				log.info("[deleteRecordById] from MySql: {}", id);
+				jpaRepository.deleteById(id);
+			});
+		}
 	}
 
 	@Override
 	public StudentBatchModel updateRecordById(Long id, StudentBatchModel studentBatchModel) {
-		Optional<StudentBatchEntity> optionalStudentBatchEntity = studentBatchRepository.findById(id);
-		if (optionalStudentBatchEntity.isPresent()) {
-			StudentBatchEntity studentBatchEntity = optionalStudentBatchEntity.get();
-			//	BeanUtils.copyProperties(record, studentBatchEntity);
-			modelMapper.map(studentBatchModel, studentBatchEntity);
-			studentBatchRepository.save(studentBatchEntity);
-		}
+		StudentBatchEntity studentBatchEntity = jpaRepository.findById(id)
+				.orElseThrow(() -> new DataNotFoundException("Record Not Found" + id));
+		//BeanUtils.copyProperties(studentBatchModel, studentBatchEntity);
+		modelMapper.map(studentBatchModel, studentBatchEntity);
+		jpaRepository.save(studentBatchEntity);
+
+		Runnable runnable = () -> {
+			StudentBatchCollection studentBatchCollection = mongoRepository.findById(id)
+					.orElseThrow(() -> new DataNotFoundException("Record Not Found" + id));
+			modelMapper.map(studentBatchModel, studentBatchCollection);
+			mongoRepository.save(studentBatchCollection);
+		};
+		CompletableFuture.runAsync(runnable);
 		return studentBatchModel;
 	}
 
@@ -138,7 +182,13 @@ public class StudentBatchService implements CommonService<StudentBatchModel, Lon
 		if (file.getContentType().equals("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) {
 			try {
 				List<StudentBatchEntity> studentBatchEntityList = studentBatchReader.getStudentBatchObjects(file.getInputStream());
-				studentBatchRepository.saveAll(studentBatchEntityList);
+				jpaRepository.saveAll(studentBatchEntityList);
+				CompletableFuture.runAsync(() -> {
+					List<StudentBatchCollection> studentBatchCollectionList = studentBatchEntityList.stream()
+							.map(studentBatchEntity -> modelMapper.map(studentBatchEntity, StudentBatchCollection.class))
+							.collect(Collectors.toList());
+					mongoRepository.saveAll(studentBatchCollectionList);
+				});
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
@@ -147,6 +197,27 @@ public class StudentBatchService implements CommonService<StudentBatchModel, Lon
 
 	private Comparator<StudentBatchEntity> findSuitableComparator(String sortBy) {
 		Comparator<StudentBatchEntity> comparator;
+		switch (sortBy) {
+			case "fees": {
+				comparator = (studentBatchOne, studentBatchTwo) ->
+						studentBatchOne.getFees().compareTo(studentBatchTwo.getFees());
+				break;
+			}
+			case "batchId": {
+				comparator = (studentBatchOne, studentBatchTwo) ->
+						studentBatchOne.getBatchId().compareTo(studentBatchTwo.getBatchId());
+				break;
+			}
+			default: {
+				comparator = (studentBatchOne, studentBatchTwo) ->
+						studentBatchOne.getId().compareTo(studentBatchTwo.getId());
+			}
+		}
+		return comparator;
+	}
+
+	private Comparator<StudentBatchCollection> findSuitableComparatorTwo(String sortBy) {
+		Comparator<StudentBatchCollection> comparator;
 		switch (sortBy) {
 			case "fees": {
 				comparator = (studentBatchOne, studentBatchTwo) ->
